@@ -1,8 +1,8 @@
-# StreamCoreAI Server
+# CallingAi Server
 
 **Open-source real-time voice agent server built on WebRTC, with multi-language client SDKs, plugin extensibility, and Markdown-based skills.**
 
-StreamCoreAI keeps the latency-sensitive media and orchestration path in Go, while letting the rest of your stack stay in the languages your team already uses.
+CallingAi keeps the latency-sensitive media and orchestration path in Go, while letting the rest of your stack stay in the languages your team already uses.
 
 That means you can:
 
@@ -12,9 +12,9 @@ That means you can:
 - register **native Go tools** inside the server when you want zero-IPC integrations
 - shape behavior with **Markdown skills**
 
-Most voice stacks force everything into one runtime. StreamCoreAI is built differently: keep the real-time path in Go, but let product, AI, and integration teams move faster in TypeScript and Python.
+Most voice stacks force everything into one runtime. CallingAi is built differently: keep the real-time path in Go, but let product, AI, and integration teams move faster in TypeScript and Python.
 
-This repository is the Go server component in the StreamCoreAI project family.
+This repository is the Go server component in the CallingAi project family.
 
 ## Sponsors & Supporters
 
@@ -26,9 +26,9 @@ This repository is the Go server component in the StreamCoreAI project family.
 
 Thank you! Interested in sponsoring? Reach out for logo placement on GitHub + demo page.
 
-## Why StreamCoreAI
+## Why CallingAi
 
-StreamCoreAI is designed for teams building real-time AI voice products who want:
+CallingAi is designed for teams building real-time AI voice products who want:
 
 - **a fast Go core** for media, session handling, and orchestration
 - **multi-language SDKs** so clients are not tied to one stack
@@ -47,7 +47,7 @@ It is a strong fit for:
 
 ## Demo
 
-See StreamCoreAI in action:
+See CallingAi in action:
 
 <a href="https://www.loom.com/share/ee079aca75aa4fa1ba6a5e51302fbd56" target="_blank">
   <img src="https://cdn.loom.com/sessions/thumbnails/ee079aca75aa4fa1ba6a5e51302fbd56-e4ee3f1f1a14a51d.jpg" alt="Demo Video" />
@@ -67,7 +67,7 @@ See StreamCoreAI in action:
 - **Native Go tool interface** for zero-IPC extensions compiled into the server
 - **Skills system** that injects Markdown instructions into the system prompt
 - **Thinking sound** — optional audible tone played through the RTP stream while a slow tool executes
-- **Client SDKs** for TypeScript (`@streamcore/js-sdk`), Go (`github.com/streamcoreai/go-sdk`), Python (`streamcoreai-sdk`), and [Rust](https://github.com/streamcoreai/rust-sdk)
+- **Client SDKs** for TypeScript (`@streamcore/js-sdk`), Go (`github.com/CallingAi/go-sdk`), Python (`CallingAi-sdk`), and [Rust](https://github.com/CallingAi/rust-sdk)
 - **Plugin SDKs** for TypeScript (`@streamcore/plugin`) and Python (`streamcore-plugin`)
 - **Built-in STUN/TURN server** using Pion — no external coturn container needed; same ports (3478 + 50000-60000)
 - **Health endpoint** at `/health`
@@ -132,7 +132,7 @@ Signaling flow: the client creates an SDP offer, gathers ICE candidates, and `PO
 
 Pipeline flow: microphone audio enters over WebRTC, is decoded to PCM, sent through STT, passed to the LLM, optionally routed through tools, synthesized with TTS, encoded back to Opus, and streamed to the client. Transcript and response text are sent back over a WebRTC DataChannel.
 
-Telephony note: SIP and phone connectivity are handled by a separate SIP bridge in the StreamCoreAI project family.
+Telephony note: SIP and phone connectivity are handled by a separate SIP bridge in the CallingAi project family.
 
 ## Prerequisites
 
@@ -165,11 +165,11 @@ Provider requirements:
 cp config.toml.example config.toml
 # Edit config.toml with your API keys
 
-docker build -t streamcoreai-server .
-docker run --rm -p 8080:8080 -v "$(pwd)/config.toml:/config.toml:ro" streamcoreai-server
+docker build -t CallingAi-server .
+docker run --rm -p 8080:8080 -v "$(pwd)/config.toml:/config.toml:ro" CallingAi-server
 ```
 
-Then connect a client to `http://localhost:8080/whip`. You can use the browser client from [streamcoreai/examples](https://github.com/streamcoreai/examples/tree/main/typescript) or any of the SDKs listed below.
+Then connect a client to `http://localhost:8080/whip`. You can use the browser client from [CallingAi/examples](https://github.com/CallingAi/examples/tree/main/typescript) or any of the SDKs listed below.
 
 ### Option B: Local Development
 
@@ -185,7 +185,7 @@ go run .
 In another terminal, run a client from its own repository. For example, with the browser app:
 
 ```bash
-git clone https://github.com/streamcoreai/examples.git
+git clone https://github.com/CallingAi/examples.git
 cd examples/typescript
 npm install
 npm run dev
@@ -576,9 +576,9 @@ parameters:
 ```python
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from streamcoreai_plugin import StreamCoreAIPlugin
+from CallingAi import CallingAi
 
-plugin = StreamCoreAIPlugin()
+plugin = CallingAi()
 
 @plugin.on_execute
 def handle(params):
@@ -637,9 +637,9 @@ If you need zero-IPC extensions, you can also register native Go tools directly 
 Client SDKs:
 
 - TypeScript SDK: `@streamcore/js-sdk`
-- Go SDK: `github.com/streamcoreai/go-sdk`
-- Python SDK: `streamcoreai-sdk`
-- [Rust SDK](https://github.com/streamcoreai/rust-sdk)
+- Go SDK: `github.com/CallingAi/go-sdk`
+- Python SDK: `CallingAi-sdk`
+- [Rust SDK](https://github.com/CallingAi/rust-sdk)
 
 Plugin SDKs:
 
@@ -648,12 +648,12 @@ Plugin SDKs:
 
 Examples:
 
-- [TypeScript browser app](https://github.com/streamcoreai/examples/tree/main/typescript)
-- [Go CLI example](https://github.com/streamcoreai/examples/tree/main/golang)
-- [Go TUI example](https://github.com/streamcoreai/examples/tree/main/golang-tui)
-- [Python examples](https://github.com/streamcoreai/examples/tree/main/python)
-- [Rust CLI example](https://github.com/streamcoreai/examples/tree/main/rust)
-- [Rust TUI example](https://github.com/streamcoreai/examples/tree/main/rust-tui)
+- [TypeScript browser app](https://github.com/CallingAi/examples/tree/main/typescript)
+- [Go CLI example](https://github.com/CallingAi/examples/tree/main/golang)
+- [Go TUI example](https://github.com/CallingAi/examples/tree/main/golang-tui)
+- [Python examples](https://github.com/CallingAi/examples/tree/main/python)
+- [Rust CLI example](https://github.com/CallingAi/examples/tree/main/rust)
+- [Rust TUI example](https://github.com/CallingAi/examples/tree/main/rust-tui)
 
 ## WHIP Protocol
 
