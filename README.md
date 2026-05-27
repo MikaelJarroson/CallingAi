@@ -1,4 +1,4 @@
-# StreamCoreAI Server
+# CallingAi Server
 
 **Open-source real-time voice agent server built on WebRTC, with multi-language client SDKs, plugin extensibility, and Markdown-based skills.**
 
@@ -26,7 +26,7 @@ This repository is the Go server component in the StreamCoreAI project family.
 
 Thank you! Interested in sponsoring? Reach out for logo placement on GitHub + demo page.
 
-## Why StreamCoreAI
+## Why CallingAi
 
 StreamCoreAI is designed for teams building real-time AI voice products who want:
 
