@@ -51,11 +51,8 @@ See CallingAi in action:
 
 ## Preview
 
-## Preview
-
 <div align="center">
-  <img src="assets/preview.png" alt="CallingAi - Voice AI Agent Framework" width="800" />
-  <p><em>CallingAi — Open-source real-time voice AI agent framework</em></p>
+  <img src="https://github.com/YOUR_USERNAME/callingai-server/assets/XXXXX/preview.png" alt="CallingAi - Voice AI Agent Framework" width="800" />
 </div>
 
 ## Features
