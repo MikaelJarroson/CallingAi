@@ -1,221 +1,713 @@
-# AWS EC2 Deployment (Free Tier)
+# StreamCoreAI Server
 
-Deploy the VoiceAgent server to a single AWS EC2 `t3.micro` instance with HTTPS via Caddy and automatic CI/CD via GitHub Actions.
+**Open-source real-time voice agent server built on WebRTC, with multi-language client SDKs, plugin extensibility, and Markdown-based skills.**
 
-## What You Get
+StreamCoreAI keeps the latency-sensitive media and orchestration path in Go, while letting the rest of your stack stay in the languages your team already uses.
 
-- **EC2 t3.micro** instance (free-tier eligible for 12 months)
-- **30 GB gp3** root volume (free-tier eligible)
-- **Elastic IP** so the address survives instance restarts
-- **Caddy** reverse proxy with automatic HTTPS (Let's Encrypt)
-- **Docker Compose** running Caddy and the VoiceAgent server (with built-in STUN/TURN)
-- **GitHub Actions** workflow that builds, pushes to GHCR, and deploys via SSH
-- Security group with ports: `22` (SSH), `80`/`443` (HTTP/HTTPS), `3478` + `50000-60000` (WebRTC UDP)
+That means you can:
+
+- run the core media pipeline in **Go**
+- connect from **TypeScript, Python, Rust, or Go**
+- extend the agent with **Python, TypeScript, or JavaScript plugins**
+- register **native Go tools** inside the server when you want zero-IPC integrations
+- shape behavior with **Markdown skills**
+
+Most voice stacks force everything into one runtime. StreamCoreAI is built differently: keep the real-time path in Go, but let product, AI, and integration teams move faster in TypeScript and Python.
+
+This repository is the Go server component in the StreamCoreAI project family.
+
+## Sponsors & Supporters
+
+<!-- The public live demo is powered by generous API credits from our sponsors. -->
+
+<div align="center">
+<!-- Logos will go here once received -->
+</div>
+
+Thank you! Interested in sponsoring? Reach out for logo placement on GitHub + demo page.
+
+## Why StreamCoreAI
+
+StreamCoreAI is designed for teams building real-time AI voice products who want:
+
+- **a fast Go core** for media, session handling, and orchestration
+- **multi-language SDKs** so clients are not tied to one stack
+- **plugin extensibility** without forcing every integration into Go
+- **skills** that shape tone and behavior without burying everything in prompts or code
+- **an open-source, self-hostable foundation** for browser, SDK, and telephony voice flows
+
+It is a strong fit for:
+
+- browser voice agents
+- AI assistants
+- internal copilots
+- AI calling systems
+- support agents
+- custom vertical voice products
+
+## Demo
+
+See StreamCoreAI in action:
+
+<a href="https://www.loom.com/share/ee079aca75aa4fa1ba6a5e51302fbd56" target="_blank">
+  <img src="https://cdn.loom.com/sessions/thumbnails/ee079aca75aa4fa1ba6a5e51302fbd56-e4ee3f1f1a14a51d.jpg" alt="Demo Video" />
+</a>
+
+## Features
+
+- **Real-time bidirectional voice** over WebRTC with Opus audio
+- **WHIP signaling** ([RFC 9725](https://www.rfc-editor.org/rfc/rfc9725.html)) with a single HTTP POST for SDP exchange
+- **Streaming STT** with Deepgram, OpenAI Whisper, or local VibeVoice-ASR
+- **Streaming LLM responses** with OpenAI or Ollama and conversation history
+- **Configurable TTS** with Cartesia, Deepgram, ElevenLabs, or local VibeVoice-Realtime
+- **Built-in RAG** with pluggable vector store backends (pgvector, Supabase) — retrieves context before the LLM call with zero tool-call overhead
+- **`streamcore-cli` ingestion tool** — parses `.txt`, `.md`, `.csv`, `.pdf`, `.docx`, `.xlsx` files, chunks them, and uploads embeddings to your vector store
+- **Barge-in support** so users can interrupt the assistant mid-response
+- **Plugin system** for Python, TypeScript, and JavaScript tools over JSON-RPC
+- **Native Go tool interface** for zero-IPC extensions compiled into the server
+- **Skills system** that injects Markdown instructions into the system prompt
+- **Thinking sound** — optional audible tone played through the RTP stream while a slow tool executes
+- **Client SDKs** for TypeScript (`@streamcore/js-sdk`), Go (`github.com/streamcoreai/go-sdk`), Python (`streamcoreai-sdk`), and [Rust](https://github.com/streamcoreai/rust-sdk)
+- **Plugin SDKs** for TypeScript (`@streamcore/plugin`) and Python (`streamcore-plugin`)
+- **Built-in STUN/TURN server** using Pion — no external coturn container needed; same ports (3478 + 50000-60000)
+- **Health endpoint** at `/health`
+
+## What Makes It Different
+
+### Go where it matters
+
+The hot path runs in Go with Pion WebRTC, goroutines, and bounded channels:
+
+- RTP read and Opus decode
+- STT streaming and VAD
+- LLM orchestration and tool calls
+- TTS synthesis
+- Opus encode and RTP write
+
+That keeps the real-time loop predictable and low-latency.
+
+### SDKs in four languages
+
+Clients can connect from:
+
+- **TypeScript**
+- **Python**
+- **Rust**
+- **Go**
+
+That makes it practical to build browser apps, backend workers, CLI tools, test harnesses, and desktop integrations without reimplementing the protocol for each environment.
+
+### Plugins and skills are separate layers
+
+Plugins give the agent **capabilities**. Skills shape its **behavior**.
+
+- Plugins call APIs, databases, calendars, CRMs, workflows, and internal tools
+- Skills define tone, personality, guardrails, brand voice, and workflow guidance
+
+This keeps business logic and behavioral instructions easier to manage than a single giant prompt.
+
+## Architecture
+
+```text
+┌─────────────────────┐                    ┌─────────────────────────────────────┐
+│    Client / SDK     │                    │          Go Server (Pion)           │
+│                     │                    │                                     │
+│  Mic → WebRTC ──────┼──── Opus RTP ──────┼──→ Opus Decode → STT               │
+│  Speaker ← WebRTC ←─┼──── Opus RTP ←─────┼──← Opus Encode ← TTS               │
+│                     │                    │               │                     │
+│  HTTP POST ─────────┼── WHIP (SDP) ──────┼──→ Peer + session created          │
+│  DataChannel ◄──────┼──── events   ←─────┼──← LLM streaming                   │
+│                     │                    │               │                     │
+│                     │                    │               ├── RAG context       │
+│                     │                    │               ├── Skills prompt     │
+│                     │                    │               ├── Plugin runtime    │
+│                     │                    │               │   ├── Python        │
+│                     │                    │               │   ├── TypeScript    │
+│                     │                    │               │   └── JavaScript    │
+│                     │                    │               └── Native Go tools   │
+└─────────────────────┘                    └─────────────────────────────────────┘
+```
+
+Signaling flow: the client creates an SDP offer, gathers ICE candidates, and `POST`s it to `/whip`. The server creates a peer, gathers its ICE candidates, and returns the SDP answer with a server-generated session ID. No persistent signaling socket is required.
+
+Pipeline flow: microphone audio enters over WebRTC, is decoded to PCM, sent through STT, passed to the LLM, optionally routed through tools, synthesized with TTS, encoded back to Opus, and streamed to the client. Transcript and response text are sent back over a WebRTC DataChannel.
+
+Telephony note: SIP and phone connectivity are handled by a separate SIP bridge in the StreamCoreAI project family.
 
 ## Prerequisites
 
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) v2
-- An AWS account (free-tier eligible)
-- A domain name with DNS access (e.g., `voice.streamcore.ai`)
+For Docker:
 
-## Step 0: AWS Account & CLI Setup
+- Docker
+- Docker Compose
 
-### 0a. Create an AWS account
+For local development:
 
-Sign up at [aws.amazon.com](https://aws.amazon.com/free/). New accounts get 12 months of free tier. You'll need a credit card on file but won't be charged for free-tier usage.
+- Go 1.22+
+- Node.js 20+ and npm
+- Python 3.10+ if you want Python plugins or examples
+- Rust 1.87+ if you want Rust SDKs or examples
 
-### 0b. Create an IAM user for Terraform
+Provider requirements:
 
-Don't use your root account. Create a dedicated IAM user:
+| Role | Providers | Required credentials |
+|------|-----------|----------------------|
+| STT | `deepgram`, `openai`, `vibevoice` | Deepgram API key, OpenAI API key, or local VibeVoice ASR server |
+| LLM | `openai`, `ollama` | OpenAI API key or local Ollama instance |
+| TTS | `cartesia`, `deepgram`, `elevenlabs`, `vibevoice` | Matching provider API key, or local VibeVoice TTS server |
+| RAG (optional) | `pgvector`, `supabase` | Postgres connection string or Supabase URL + API key. Also requires an OpenAI API key for embeddings. |
 
-1. Go to **IAM > Users > Create user**
-2. Name it something like `terraform`
-3. Attach the **AdministratorAccess** policy (or scope it down — see note below)
-4. Go to the user's **Security credentials** tab > **Create access key**
-5. Choose **Command Line Interface (CLI)** as the use case
-6. Save the **Access Key ID** and **Secret Access Key** — you'll need them next
+## Quick Start
 
-> **Least-privilege alternative**: Instead of `AdministratorAccess`, you can create a custom policy with just `ec2:*`, `elasticipaddress:*`, and `vpc:Describe*`. `AdministratorAccess` is simpler for getting started.
-
-### 0c. Configure the AWS CLI
-
-Install the CLI, then run:
+### Option A: Docker
 
 ```bash
-aws configure
+cp config.toml.example config.toml
+# Edit config.toml with your API keys
+
+docker build -t streamcoreai-server .
+docker run --rm -p 8080:8080 -v "$(pwd)/config.toml:/config.toml:ro" streamcoreai-server
 ```
 
-It will prompt for four values:
+Then connect a client to `http://localhost:8080/whip`. You can use the browser client from [streamcoreai/examples](https://github.com/streamcoreai/examples/tree/main/typescript) or any of the SDKs listed below.
 
-```
-AWS Access Key ID:     <paste from step 0b>
-AWS Secret Access Key: <paste from step 0b>
-Default region name:   us-east-1
-Default output format: json
-```
+### Option B: Local Development
 
-This writes credentials to `~/.aws/credentials` — Terraform reads them automatically.
-
-### 0d. Verify it works
+Start the server from this repository:
 
 ```bash
-aws sts get-caller-identity
+cp config.toml.example config.toml
+# Edit config.toml with your API keys
+
+go run .
 ```
 
-You should see your account ID and IAM user ARN. If this works, Terraform will too.
-
-## Step 1: Create an EC2 Key Pair
-
-If you don't already have one:
+In another terminal, run a client from its own repository. For example, with the browser app:
 
 ```bash
-aws ec2 create-key-pair \
-  --key-name voiceagent \
-  --query 'KeyMaterial' \
-  --output text > voiceagent.pem
-
-chmod 400 voiceagent.pem
+git clone https://github.com/streamcoreai/examples.git
+cd examples/typescript
+npm install
+npm run dev
 ```
 
-## Step 2: Provision with Terraform
+Then open [http://localhost:3000](http://localhost:3000). By default it connects to `http://localhost:8080/whip`.
+
+### Option C: Fully Local Setup (No API Keys)
+
+Run everything locally using Ollama for LLM and VibeVoice for STT/TTS:
+
+**1. Install and start Ollama**
 
 ```bash
-cd server/infrastructure/aws/ec2
+# Install from https://ollama.ai or via:
+brew install ollama  # macOS
+# curl -fsSL https://ollama.com/install.sh | sh  # Linux
 
-# Copy and edit the variables
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars — set key_pair_name to your key pair name
-
-# Initialize and apply
-terraform init
-terraform plan
-terraform apply
+# Start Ollama and pull a model
+ollama serve  # runs in background on macOS, or start as systemd service on Linux
+ollama pull gpt-oss:20b
 ```
 
-Terraform will output the public IP and SSH command when done.
-
-## Step 3: Point Your Domain
-
-Create a DNS **A record** pointing your domain to the Elastic IP from the Terraform output:
-
-```
-voice.streamcore.ai  →  A  →  <PUBLIC_IP>
-```
-
-Do this in your DNS provider (Cloudflare, Route 53, Namecheap, etc.). Caddy needs DNS to resolve before it can provision the HTTPS certificate.
-
-> **Tip**: You can verify propagation with `dig voice.streamcore.ai` or `nslookup voice.streamcore.ai`.
-
-## Step 4: Verify the Instance
-
-SSH into the instance (it takes ~2 minutes for user-data to finish on first boot):
+**2. Install Python dependencies and start VibeVoice servers**
 
 ```bash
-ssh -i voiceagent.pem ec2-user@<PUBLIC_IP>
+# Install dependencies (Apple Silicon)
+pip install mlx-audio numpy websockets fastapi uvicorn
 
-# Check Docker is running
-docker --version
+# OR for Linux/CUDA:
+# pip install torch transformers librosa numpy websockets fastapi uvicorn
+
+# Terminal 1: Start ASR server
+python external/vibeVoice/vibeVoiceAsr/server.py
+# Listens on ws://127.0.0.1:8200
+
+# Terminal 2: Start TTS server
+python external/vibeVoice/vibeVoiceTTS/server.py
+# Listens on http://127.0.0.1:8300
 ```
 
-## Step 5: Configure `public_ip` in `config.toml`
+**3. Configure the Go server**
 
-WebRTC requires the server to advertise its public IP for ICE candidates. Without this, clients can't establish media connections to an EC2 instance behind NAT.
+```bash
+cp config.toml.example config.toml
+```
 
-Add the Elastic IP to the `[server]` section of your production `config.toml`:
+Edit `config.toml`:
+```toml
+[stt]
+provider = "vibevoice"
+
+[llm]
+provider = "ollama"
+
+[tts]
+provider = "vibevoice"
+
+[ollama]
+base_url = "http://localhost:11434"
+model = "llama3.2"
+
+[vibevoice]
+asr_url = "ws://127.0.0.1:8200"
+tts_url = "http://127.0.0.1:8300"
+voice = "en-Emma_woman"
+```
+
+**4. Start the Go server**
+
+```bash
+go run .
+```
+
+Now you have a fully local voice AI with no external API dependencies.
+
+## Configuration
+
+Use [`config.toml.example`](./config.toml.example) as your starting point:
 
 ```toml
 [server]
 port = "8080"
-public_ip = "<PUBLIC_IP>"   # Elastic IP from Terraform output — required for WebRTC on EC2
-turn_secret = "changeme"    # Shared secret for the built-in STUN/TURN server
+# public_ip = ""       # Set to EC2 Elastic IP for production (enables built-in STUN/TURN)
+# turn_secret = ""     # Shared secret for the built-in STUN/TURN server (required when public_ip is set)
+
+[plugins]
+directory = "./plugins"
+
+[pipeline]
+barge_in = true
+greeting = ""
+greeting_outgoing = ""
+debug = false
+
+[stt]
+provider = "deepgram"
+
+[llm]
+provider = "openai"
+
+[tts]
+provider = "cartesia"
+
+[deepgram]
+api_key = ""
+model = "nova-3"
+
+[openai]
+api_key = ""
+model = "gpt-4o-mini"
+system_prompt = "You are a helpful AI voice assistant. Keep your responses concise and conversational."
+
+[ollama]
+base_url = "http://localhost:11434"
+model = "llama3.2"
+system_prompt = "You are a helpful AI voice assistant. Keep your responses concise and conversational."
+
+[cartesia]
+api_key = ""
+voice_id = ""
+
+[elevenlabs]
+api_key = ""
+voice_id = ""
+model = ""
+
+[vibevoice]
+asr_url = "ws://127.0.0.1:8200"
+tts_url = "http://127.0.0.1:8300"
+voice = "en-Emma_woman"
+
+# RAG is optional — omit the [rag] section to disable it entirely.
+# [rag]
+# provider = "supabase"       # "pgvector" or "supabase"
+# top_k = 3                   # Number of chunks to retrieve per query
+# embedding_model = "text-embedding-3-small"
+
+# [pgvector]
+# connection_string = "postgres://user:pass@localhost:5432/mydb"
+# table = "documents"         # Table with content TEXT and embedding vector(1536) columns
+
+# [supabase]
+# url = "https://xxx.supabase.co"
+# api_key = ""                # Supabase anon or service_role key
+# function = "match_documents" # Postgres RPC function name (used by server for queries)
+# table = "documents"         # Table name (used by streamcore-cli for ingestion)
 ```
 
-> **Why**: EC2 instances only see their private IP (`172.31.x.x`). Without `public_ip`, WebRTC ICE candidates contain the private IP which browsers can't reach.
+Notes:
 
-## Step 6: Set Up GitHub Actions Secrets
+- `server.public_ip` enables the built-in STUN/TURN server (Pion) when paired with `server.turn_secret`. This replaces the external coturn container. The TURN server listens on UDP port 3478 and relays media on ports 50001-60000.
+- `plugins.directory` is required if you want plugins and skills loaded. If it is omitted, the server skips plugin discovery.
+- `pipeline.barge_in` lets users interrupt the assistant while it is speaking.
+- `pipeline.greeting` plays when a session starts. `pipeline.greeting_outgoing` is used for outbound SIP calls when present.
+- `pipeline.debug = true` emits timing events over the DataChannel.
+- `stt.provider = "openai"` uses Whisper-style final transcription instead of streaming partials.
+- `llm.provider = "ollama"` uses a local Ollama instance instead of OpenAI. Make sure Ollama is running and the specified model is pulled (e.g., `ollama pull llama3.2`).
+- `stt.provider = "vibevoice"` and `tts.provider = "vibevoice"` use local VibeVoice models. Start the Python servers first (see [Local VibeVoice Setup](#local-vibevoice-setup)).
+- `rag.provider` enables built-in RAG. When set, the server embeds each user utterance and retrieves the top-k most relevant chunks from your vector store before calling the LLM — all in a single LLM pass with no tool-call overhead.
 
-In your GitHub repository, go to **Settings > Secrets and variables > Actions** and add these secrets:
+## RAG (Retrieval-Augmented Generation)
 
-| Secret | Description |
-|---|---|
-| `EC2_HOST` | The Elastic IP from Terraform output |
-| `EC2_SSH_KEY` | Contents of your `.pem` private key file |
-| `CONFIG_TOML` | Full contents of your production `config.toml` (with `public_ip`, `turn_secret` set, and real API keys) |
-| `DOMAIN` | Your domain name (e.g., `voice.streamcore.ai`) |
+RAG lets the agent answer questions grounded in your own documents. It runs inline in the voice pipeline — the server embeds the user's query, retrieves relevant chunks from a vector store, and injects them as context before the LLM call. This avoids an extra LLM round-trip that a tool-call approach would require.
 
-The workflow uses `GITHUB_TOKEN` (automatic) for GHCR, so no extra token is needed.
+### Supported providers
 
-## Step 7: Deploy
+| Provider | Backend | Config section |
+|----------|---------|----------------|
+| `pgvector` | PostgreSQL with the pgvector extension | `[pgvector]` |
+| `supabase` | Supabase (calls a Postgres RPC function over HTTP) | `[supabase]` |
 
-The workflow at `.github/workflows/deploy-ec2.yml` triggers automatically on push to `main`. You can also trigger it manually from the Actions tab.
+Both providers use OpenAI embeddings (`text-embedding-3-small` by default). Your `[openai]` API key must be set.
 
-What the workflow does:
+### pgvector setup
 
-1. **Build** — builds the Docker image from `server/Dockerfile`
-2. **Push** — pushes to GitHub Container Registry (`ghcr.io/<owner>/voiceagent-server`)
-3. **Deploy** — SSHs into EC2, pulls the new image, copies compose files
-4. **Start** — runs `docker compose up -d` (Caddy + VoiceAgent server with built-in STUN/TURN)
-5. **Health check** — hits `http://localhost:8080/health` to verify the server started
+1. Enable the pgvector extension in your Postgres database:
 
-Caddy automatically provisions a Let's Encrypt TLS certificate on first deploy and renews it before expiry.
-
-## Step 8: Connect
-
-Once deployed and DNS has propagated, your WHIP endpoint is:
-
-```
-https://voice.streamcore.ai/whip
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-Test it:
+2. Create the documents table:
+
+```sql
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    embedding vector(1536),
+    source TEXT
+);
+```
+
+3. Add to `config.toml`:
+
+```toml
+[rag]
+provider = "pgvector"
+
+[pgvector]
+connection_string = "postgres://user:pass@localhost:5432/mydb"
+```
+
+### Supabase setup
+
+1. In your Supabase project, create the documents table and an RPC function:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    embedding vector(1536),
+    source TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE OR REPLACE FUNCTION match_documents(
+    query_embedding vector(1536),
+    match_count int DEFAULT 3
+)
+RETURNS TABLE (content text, similarity float)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+    SELECT d.content, 1 - (d.embedding <=> query_embedding) AS similarity
+    FROM documents d
+    ORDER BY d.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;
+
+-- Enable Row Level Security
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+
+-- Allow authenticated users and anon to SELECT (for server/agent queries)
+CREATE POLICY "Allow read access to documents"
+ON documents FOR SELECT
+TO authenticated, anon
+USING (true);
+
+-- Allow authenticated users and anon to INSERT (for streamcore-cli ingestion)
+CREATE POLICY "Allow insert access to documents"
+ON documents FOR INSERT
+TO authenticated, anon
+WITH CHECK (true);
+
+-- Allow authenticated users and anon to UPDATE
+CREATE POLICY "Allow update access to documents"
+ON documents FOR UPDATE
+TO authenticated, anon
+USING (true);
+```
+
+2. Add to `config.toml`:
+
+```toml
+[rag]
+provider = "supabase"
+
+[supabase]
+url = "https://xxx.supabase.co"
+api_key = "your-service-role-key"
+function = "match_documents"
+table = "documents"
+```
+
+### Ingesting documents
+
+The server handles query-time retrieval only. To populate your vector store, use the `streamcore-cli` tool from the [`streamcore-cli/`](../streamcore-cli/) directory.
+
+**Install:**
 
 ```bash
-curl https://voice.streamcore.ai/health
-# => ok
+cd streamcore-cli
+go build -o streamcore-cli .
 ```
 
-## Cost Breakdown (Free Tier)
-
-| Resource | Free Tier Allowance | This Setup |
-|---|---|---|
-| EC2 t3.micro | 750 hrs/month for 12 months | 1 instance |
-| EBS gp3 | 30 GB for 12 months | 30 GB |
-| Elastic IP | Free while attached to a running instance | 1 EIP |
-| Data transfer | 100 GB/month outbound | Varies |
-
-> **Note**: The Elastic IP is free only while the instance is **running**. If you stop the instance, AWS charges ~$0.005/hr for the unattached EIP. Either terminate the instance or release the EIP when not in use.
-
-## Production Considerations
-
-This free-tier setup is great for development and demos. For production, consider:
-
-- **Instance size** — `t3.micro` has 2 vCPUs and 1 GB RAM. Supports ~4 concurrent voice sessions (with 10-minute session limits). Consider `t3.small` for ~6-8 sessions or `c6i.large` for heavier workloads.
-- **Restrict SSH** — set `ssh_allowed_cidrs` to your IP instead of `0.0.0.0/0`.
-- **Monitoring** — enable CloudWatch alarms for CPU, memory, and disk.
-- **Backups** — set up EBS snapshots if you store any state on disk.
-
-## Tear Down
+**Ingest files:**
 
 ```bash
-terraform destroy
+# Ingest one or more files — supports .txt, .md, .csv, .pdf, .docx, .xlsx
+streamcore-cli ingest docs/faq.pdf product-catalog.xlsx notes.md
+
+# Override provider or point to a specific config
+streamcore-cli ingest --provider supabase --config ../server/config.toml data.csv
+
+# Control chunk size and overlap
+streamcore-cli ingest --chunk-size 256 --chunk-overlap 32 manual.docx
 ```
 
-This removes the EC2 instance, security group, and Elastic IP.
+The CLI reads your server's `config.toml` automatically for provider credentials, so you don't configure things twice. It parses each file into text, splits it into overlapping chunks (default 512 words with 64-word overlap), embeds each chunk via OpenAI, and inserts it into your vector store.
 
-## File Structure
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--config` | auto-detected | Path to server `config.toml` |
+| `--provider` | from config | Override RAG provider (`pgvector`, `supabase`) |
+| `--chunk-size` | 512 | Target chunk size in words |
+| `--chunk-overlap` | 64 | Overlap between chunks in words |
 
+## Local VibeVoice Setup
+
+VibeVoice provides fully local STT and TTS — no API keys needed. It uses [VibeVoice-ASR](https://huggingface.co/mlx-community/VibeVoice-ASR-4bit) for speech recognition and [VibeVoice-Realtime-0.5B](https://huggingface.co/mlx-community/VibeVoice-Realtime-0.5B-6bit) for text-to-speech via two lightweight Python sidecar servers.
+
+On Apple Silicon the servers use [mlx-audio](https://github.com/Blaizzy/mlx-audio) (MLX). On Linux/Windows they fall back to PyTorch automatically.
+
+### 1. Install dependencies
+
+```bash
+# Apple Silicon (MLX)
+pip install mlx-audio numpy websockets fastapi uvicorn
+
+# OR PyTorch (Linux / CUDA)
+pip install torch transformers librosa numpy websockets fastapi uvicorn
 ```
-infrastructure/aws/ec2/
-  main.tf                  # EC2 instance, security group, EIP
-  variables.tf             # Input variables
-  outputs.tf               # Instance IP, SSH command, server URL
-  terraform.tfvars.example # Example variable values
-  Caddyfile                # Caddy reverse proxy config
-  docker-compose.yml       # Runs Caddy + VoiceAgent server
-  deploy-ec2.yml           # Reference copy of the GitHub Actions workflow
-  .gitignore               # Ignore Terraform state and secrets
-  README.md                # This file
+
+### 2. Start the ASR server
+
+```bash
+python external/vibeVoice/vibeVoiceAsr/server.py
+# Listens on ws://127.0.0.1:8200
+# Default model: mlx-community/VibeVoice-ASR-4bit (Mac) or microsoft/VibeVoice-ASR (PyTorch)
 ```
 
-The actual workflow lives at `.github/workflows/deploy-ec2.yml` in the server repo root.
+### 3. Start the TTS server
+
+```bash
+python external/vibeVoice/vibeVoiceTTS/server.py
+# Listens on http://127.0.0.1:8300
+# Default model: mlx-community/VibeVoice-Realtime-0.5B-6bit (Mac) or microsoft/VibeVoice-Realtime-0.5B (PyTorch)
+```
+
+### 4. Configure the Go server
+
+```toml
+[stt]
+provider = "vibevoice"
+
+[tts]
+provider = "vibevoice"
+
+[vibevoice]
+asr_url = "ws://127.0.0.1:8200"
+tts_url = "http://127.0.0.1:8300"
+voice = "en-Emma_woman"
+```
+
+The ASR server accepts live PCM audio over WebSocket and emits JSON transcript events. The TTS server accepts HTTP POST requests and returns raw PCM audio.
+
+## Plugins And Skills
+
+Plugins give the LLM callable tools during a conversation. Skills inject Markdown instructions into the system prompt for every session.
+
+- Plugin Development Guide
+- Skills Development Guide
+
+This repo already includes sample plugins and skills under [plugins/](./plugins/).
+
+### Quick Plugin Example
+
+Create a Python plugin that tells the time:
+
+```bash
+mkdir -p plugins/plugins/time-get
+```
+
+`plugins/plugins/time-get/plugin.yaml`
+
+```yaml
+name: time.get
+description: Get the current time in a timezone
+version: 1
+language: python
+entrypoint: main.py
+parameters:
+  type: object
+  properties:
+    timezone:
+      type: string
+      description: IANA timezone name
+  required:
+    - timezone
+```
+
+`plugins/plugins/time-get/main.py`
+
+```python
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from streamcoreai_plugin import StreamCoreAIPlugin
+
+plugin = StreamCoreAIPlugin()
+
+@plugin.on_execute
+def handle(params):
+    tz = ZoneInfo(params["timezone"])
+    now = datetime.now(tz)
+    return f"The current time is {now.strftime('%I:%M %p')} in {params['timezone']}."
+
+plugin.run()
+```
+
+Restart the server, then ask the agent for the time in a specific timezone.
+
+### Plugin Manifest Reference
+
+The `plugin.yaml` file supports these fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Unique tool name the LLM calls (e.g. `weather.get`) |
+| `description` | string | yes | What the tool does — shown to the LLM |
+| `version` | int | yes | Manifest version |
+| `language` | string | yes | `python`, `typescript`, or `javascript` |
+| `entrypoint` | string | yes | File to run (e.g. `main.py`, `index.ts`) |
+| `parameters` | object | yes | JSON Schema describing the tool's parameters |
+| `confirmation_required` | bool | no | If `true`, the agent asks the user to confirm before executing (default: `false`) |
+| `thinking_sound` | bool | no | If `true`, a soft looping tone plays through the audio stream while the tool executes — useful for slow API calls so the user knows something is happening (default: `false`) |
+
+The thinking sound has a 500ms grace period. If the tool returns faster than that, no sound is played.
+
+### Included Plugins
+
+| Plugin | Language | Description |
+|--------|----------|-------------|
+| `math.calculate` | TypeScript | Evaluate math expressions |
+| `weather.get` | TypeScript | Current weather for a location |
+| `time.get` | Python | Current date/time in any timezone |
+| `vision.analyze` | TypeScript | Analyze images from a device camera |
+| `gmail` | TypeScript | Read and send emails via Gmail (OAuth2). See [Gmail plugin README](plugins/plugins/gmail/README.md) for setup. |
+
+### Included Skills
+
+| Skill | Description |
+|-------|-------------|
+| `tool-savvy` | Guides the agent to use tools instead of guessing |
+| `friendly-conversationalist` | Warm, natural conversational personality |
+| `polite-assistant` | Concise and polite voice interaction style |
+| `concise-responder` | Keeps responses short for spoken delivery |
+| `error-recovery` | Handles errors gracefully in voice conversations |
+| `vision-assistant` | Enables camera-based image analysis |
+| `gmail-assistant` | Walks through emails one-by-one with reply & confirm flow |
+
+If you need zero-IPC extensions, you can also register native Go tools directly in the server via `pluginMgr.RegisterNative(...)`. See the Go section in the plugin development guide.
+
+## SDKs And Examples
+
+Client SDKs:
+
+- TypeScript SDK: `@streamcore/js-sdk`
+- Go SDK: `github.com/streamcoreai/go-sdk`
+- Python SDK: `streamcoreai-sdk`
+- [Rust SDK](https://github.com/streamcoreai/rust-sdk)
+
+Plugin SDKs:
+
+- TypeScript plugin SDK: `@streamcore/plugin`
+- Python plugin SDK: `streamcore-plugin`
+
+Examples:
+
+- [TypeScript browser app](https://github.com/streamcoreai/examples/tree/main/typescript)
+- [Go CLI example](https://github.com/streamcoreai/examples/tree/main/golang)
+- [Go TUI example](https://github.com/streamcoreai/examples/tree/main/golang-tui)
+- [Python examples](https://github.com/streamcoreai/examples/tree/main/python)
+- [Rust CLI example](https://github.com/streamcoreai/examples/tree/main/rust)
+- [Rust TUI example](https://github.com/streamcoreai/examples/tree/main/rust-tui)
+
+## WHIP Protocol
+
+Signaling follows [RFC 9725](https://www.rfc-editor.org/rfc/rfc9725.html).
+
+### HTTP SDP Exchange
+
+| Step | Method | Path | Body | Response |
+|------|--------|------|------|----------|
+| 1 | `POST` | `/whip` | SDP offer (`application/sdp`) | `201 Created` with SDP answer, `Location: /whip/{sessionId}`, and `ETag` |
+| 2 | `DELETE` | `/whip/{sessionId}` | none | `200 OK` |
+| - | `OPTIONS` | `/whip` or `/whip/{sessionId}` | none | `204 No Content` with `Accept-Post: application/sdp` |
+
+The client gathers ICE candidates before sending the offer. The server gathers ICE candidates before returning the answer. No trickle ICE is used.
+
+### DataChannel Events
+
+The client must create a DataChannel labeled `events` before generating the offer. The server currently sends these JSON messages:
+
+| Type | Payload | Description |
+|------|---------|-------------|
+| `transcript` | `{ "type": "transcript", "text": string, "final": boolean }` | User transcript updates |
+| `response` | `{ "type": "response", "text": string }` | Streamed LLM response text |
+| `timing` | `{ "type": "timing", "stage": string, "ms": number }` | Optional latency timings when `pipeline.debug = true` |
+
+Current timing stages are:
+
+- `llm_first_token`
+- `tts_first_byte`
+
+### RFC Notes
+
+This implementation aligns with the core WHIP flow in RFC 9725:
+
+- `POST` with `application/sdp`
+- `201 Created` with SDP answer
+- `Location` header for the session URL
+- `ETag` header for the ICE session
+- `DELETE` for teardown
+- `OPTIONS` with `Accept-Post: application/sdp`
+- full ICE gathering on both sides
+
+The server uses `sendrecv` audio and a DataChannel to support bidirectional voice interaction.
+
+## Scaling And Roadmap
+
+Today, session management is in-memory and single-process. For horizontal scaling you will need sticky routing or external session coordination.
+
+Near-term areas to build on:
+
+- persistent memory across sessions
+- more end-to-end SDK and plugin examples
+- easier deployment and hosted workflows
+
+## License
+
+Apache 2.0. See [LICENSE](./LICENSE).
