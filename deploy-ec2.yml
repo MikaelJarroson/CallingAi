@@ -107,18 +107,6 @@ jobs:
             # Clean up old images
             docker image prune -f
 
-            # Verify health — plugins (especially TypeScript ones using npx tsx) can
-            # take 15–30 s to initialise on a t3.micro, so retry for up to 60 s.
-            echo "Waiting for server to become healthy..."
-            for i in $(seq 1 12); do
-              if curl -sf http://localhost:8080/health; then
-                echo ""
-                echo "Server is healthy!"
-                exit 0
-              fi
-              echo "  attempt $i/12 — not ready yet, retrying in 5 s..."
-              sleep 5
-            done
-            echo "Server failed to become healthy within 60 s"
-            docker compose logs
-            exit 1
+            # Verify health
+            sleep 5
+            curl -sf http://localhost:8080/health || (docker compose logs && exit 1)
