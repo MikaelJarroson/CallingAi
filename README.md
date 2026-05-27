@@ -47,7 +47,7 @@ It is a strong fit for:
 
 ## Demo
 
-See StreamCoreAI in action:
+See CallingAi in action:
 
 <a href="https://www.loom.com/share/ee079aca75aa4fa1ba6a5e51302fbd56" target="_blank">
   <img src="https://cdn.loom.com/sessions/thumbnails/ee079aca75aa4fa1ba6a5e51302fbd56-e4ee3f1f1a14a51d.jpg" alt="Demo Video" />
